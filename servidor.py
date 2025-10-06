@@ -1,5 +1,7 @@
 import socket
 import threading
+import asyncio
+import websockets
 import json
 import numpy as np
 import time
@@ -129,6 +131,7 @@ class GameServer:
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(2)
+        client_socket, address = self.server_socket.accept()
         self.running = True
 
         print(f"🎮 Servidor Othello iniciado en {self.host}:{self.port}")
