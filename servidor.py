@@ -114,7 +114,7 @@ class OthelloGame:
 
 
 class GameServer:
-    def __init__(self, host='192.168.100.13', port=5555):
+    def __init__(self, host='0.0.0.0', port=5555):
         self.host = host
         self.port = port
         self.server_socket = None
@@ -346,14 +346,16 @@ class GameServer:
 
 
 if __name__ == "__main__":
+    import os
+
     print("=" * 50)
-    print("🎮 SERVIDOR OTHELLO")
+    print("🎮 SERVIDOR OTHELLO (Render Ready)")
     print("=" * 50)
 
-    port_input = input("Puerto [5555]: ").strip()
-    port = int(port_input) if port_input.isdigit() else 5555
+    # Render define el puerto en la variable de entorno PORT
+    port = int(os.environ.get("PORT", 5555))
 
-    server = GameServer(port=port)
+    server = GameServer(host="0.0.0.0", port=port)
 
     try:
         server.start()
