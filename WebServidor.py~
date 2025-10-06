@@ -110,7 +110,7 @@ class GameServer:
         self.game = None
 
     async def handler(self, websocket):  #  cambiado (era handle_client con socket)
-        if len(self.clients) > 2:
+        if len(self.clients) >= 2:
             await websocket.send(json.dumps({
                 "type": "error",
                 "message": "Servidor lleno"
