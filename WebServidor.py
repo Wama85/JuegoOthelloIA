@@ -1,22 +1,17 @@
-# ==============================================================
-# VERSIÓN ADAPTADA A WEBSOCKET PARA RENDER
-# Solo se cambiaron las partes de conexión TCP -> WebSocket
-# ==============================================================
-import asyncio            #  agregado
-import websockets          #  agregado
+import asyncio
+import websockets
 import json
 import numpy as np
-import os                  #  agregado (para puerto dinámico en Render)
+import os
 
 
 class OthelloGame:
     def __init__(self):
         self.board = np.zeros((8, 8), dtype=int)
-        self.current_player = 1  # 1 = Negro, 2 = Blanco
+        self.current_player = 1
         self.game_over = False
         self.winner = None
-
-        # Configuración inicial del tablero
+        # Posición inicial
         self.board[3][3] = 2
         self.board[4][4] = 2
         self.board[3][4] = 1
@@ -24,23 +19,22 @@ class OthelloGame:
 
     def get_valid_moves(self, player):
         valid_moves = []
-        for row in range(8):
-            for col in range(8):
-                if self.is_valid_move(row, col, player):
-                    valid_moves.append([row, col])
+        for r in range(8):
+            for c in range(8):
+                if self.is_valid_move(r, c, player):
+                    valid_moves.append([r, c])
         return valid_moves
 
     def is_valid_move(self, row, col, player):
         if self.board[row][col] != 0:
             return False
-        opponent = 3 - player
-        directions = [(-1, -1), (-1, 0), (-1, 1),
-                      (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
-        for dr, dc in directions:
-            r, c = row + dr, col + dc
+        opp = 3 - player
+        dirs = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]
+        for dr, dc in dirs:
+            r, c = row+dr, col+dc
             found = False
             while 0 <= r < 8 and 0 <= c < 8:
-                if self.board[r][c] == opponent:
+                if self.board[r][c] == opp:
                     found = True
                     r += dr
                     c += dc
@@ -54,14 +48,13 @@ class OthelloGame:
         if not self.is_valid_move(row, col, player):
             return False
         self.board[row][col] = player
-        opponent = 3 - player
-        directions = [(-1, -1), (-1, 0), (-1, 1),
-                      (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
-        for dr, dc in directions:
-            r, c = row + dr, col + dc
+        opp = 3 - player
+        dirs = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]
+        for dr, dc in dirs:
+            r, c = row+dr, col+dc
             flips = []
             while 0 <= r < 8 and 0 <= c < 8:
-                if self.board[r][c] == opponent:
+                if self.board[r][c] == opp:
                     flips.append((r, c))
                     r += dr
                     c += dc
@@ -74,10 +67,9 @@ class OthelloGame:
         return True
 
     def get_scores(self):
-        return {
-            "black": int(np.sum(self.board == 1)),
-            "white": int(np.sum(self.board == 2))
-        }
+        black = int(np.sum(self.board == 1))
+        white = int(np.sum(self.board == 2))
+        return {"black": black, "white": white}
 
     def check_game_over(self):
         if not self.get_valid_moves(1) and not self.get_valid_moves(2):
@@ -109,8 +101,8 @@ class GameServer:
         self.player_colors = {}
         self.game = None
 
-    async def handler(self, websocket):  #  cambiado (era handle_client con socket)
-        if len(self.clients) > 2:
+    async def handler(self, websocket):
+        if len(self.clients) >= 2:
             await websocket.send(json.dumps({
                 "type": "error",
                 "message": "Servidor lleno"
@@ -140,21 +132,50 @@ class GameServer:
                 "message": "¡Juego iniciado!",
                 "game_state": self.game.get_state()
             }
-            #  envío simultáneo a ambos
             await asyncio.gather(*[c.send(json.dumps(msg)) for c in self.clients])
 
         try:
-            async for data in websocket:  #  cambiado (antes .recv en loop)
+            async for data in websocket:
                 message = json.loads(data)
                 await self.process_message(websocket, message)
         except websockets.ConnectionClosed:
             await self.disconnect(websocket)
 
-    async def process_message(self, websocket, message):  #  cambiado (async)
-        if message.get("type") == "move":
-            await self.handle_move(websocket, message)
+    # ==========================================================
+    # 🔧 Mensajes procesados (join + move)
+    # ==========================================================
+    async def process_message(self, websocket, message):
+        try:
+            tipo = message.get("type")
 
-    async def handle_move(self, websocket, message):  #  cambiado (async)
+            if tipo == "join":
+                nombre = message.get("name", "IA")
+                await websocket.send(json.dumps({
+                    "type": "ack",
+                    "message": f"Jugador {nombre} conectado correctamente"
+                }))
+                return
+
+            if tipo == "move":
+                await self.handle_move(websocket, message)
+                return
+
+            await websocket.send(json.dumps({
+                "type": "error",
+                "message": f"Tipo de mensaje desconocido: {tipo}"
+            }))
+        except Exception as e:
+            await websocket.send(json.dumps({
+                "type": "error",
+                "message": f"Error interno del servidor: {str(e)}"
+            }))
+            import traceback
+            traceback.print_exc()
+
+    # ==========================================================
+    # 🔥 Lógica de movimientos
+    # ==========================================================
+    async def handle_move(self, websocket, message):
         if not self.game or self.game.game_over:
             await websocket.send(json.dumps({
                 "type": "move_response",
@@ -163,7 +184,7 @@ class GameServer:
             }))
             return
 
-        color = self.player_colors[websocket]
+        color = self.player_colors.get(websocket)
         if color != self.game.current_player:
             await websocket.send(json.dumps({
                 "type": "move_response",
@@ -173,12 +194,23 @@ class GameServer:
             return
 
         r, c = message.get("row"), message.get("col")
+        if r is None or c is None:
+            await websocket.send(json.dumps({
+                "type": "move_response",
+                "success": False,
+                "message": "Movimiento inválido (faltan coordenadas)"
+            }))
+            return
 
         if self.game.make_move(r, c, color):
+            print(f"🎯 Jugador {color} movió a ({r},{c})")  # 🆕 Log en consola
             self.game.current_player = 3 - self.game.current_player
             self.game.check_game_over()
-            update = {"type": "game_update", "game_state": self.game.get_state()}
-            await asyncio.gather(*[c.send(json.dumps(update)) for c in self.clients])  #  cambiado
+            update = {
+                "type": "game_update",
+                "game_state": self.game.get_state()
+            }
+            await asyncio.gather(*[c.send(json.dumps(update)) for c in self.clients])
         else:
             await websocket.send(json.dumps({
                 "type": "move_response",
@@ -186,7 +218,10 @@ class GameServer:
                 "message": "Movimiento inválido"
             }))
 
-    async def disconnect(self, websocket):  #  cambiado (async)
+    # ==========================================================
+    # 🔻 Desconexión
+    # ==========================================================
+    async def disconnect(self, websocket):
         if websocket in self.clients:
             self.clients.remove(websocket)
             for c in self.clients:
@@ -198,12 +233,15 @@ class GameServer:
             self.player_colors = {}
 
 
-async def main():  #  agregado
+# ==============================================================
+# MAIN
+# ==============================================================
+async def main():
     port = int(os.environ.get("PORT", 5555))
     async with websockets.serve(GameServer().handler, "0.0.0.0", port):
-        print(f"🎮 Servidor WebSocket corriendo en puerto {port}")
-        await asyncio.Future()  # Mantiene el servidor vivo
+        print(f"🚀 Servidor WebSocket corriendo en puerto {port}")
+        await asyncio.Future()  # Mantenerlo activo
 
 
-if __name__ == "__main__":  #  cambiado (usa asyncio)
+if __name__ == "__main__":
     asyncio.run(main())

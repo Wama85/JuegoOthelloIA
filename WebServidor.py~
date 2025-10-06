@@ -205,5 +205,5 @@ async def main():  #  agregado
         await asyncio.Future()  # Mantiene el servidor vivo
 
 
-if __name__ == "__main__":  #  cambiado (usa asyncio)
+if __name__ == "__main__":  # 🔄 cambiado (usa asyncio)
     asyncio.run(main())

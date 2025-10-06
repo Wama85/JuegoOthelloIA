@@ -352,7 +352,7 @@ if __name__ == "__main__":
     import os
 
     print("=" * 50)
-    print("🎮 SERVIDOR OTHELLO (Render Ready)")
+    print("🎮 SERVIDOR OTHELLO ")
     print("=" * 50)
 
     # Render define el puerto en la variable de entorno PORT
